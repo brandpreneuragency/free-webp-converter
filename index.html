@@ -379,6 +379,12 @@
             color: #991b1b;
         }
 
+        .alert-info {
+            background: #dbeafe;
+            border-color: #3b82f6;
+            color: #1e40af;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 25px;
@@ -458,7 +464,10 @@
 
         <!-- VIDEOS TAB -->
         <div class="tab-content" id="videos-content">
-            <div id="videoAlert" class="alert" style="display: none;"></div>
+            <div id="videoAlert" class="alert alert-info">
+                <strong>Note:</strong> Video conversion uses FFmpeg WebAssembly and requires downloading ~31MB on first use. 
+                The conversion happens entirely in your browser. For best results, use Chrome or Edge browsers.
+            </div>
 
             <div class="upload-area" id="videoUploadArea">
                 <div class="upload-icon">🎬</div>
@@ -510,8 +519,8 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script type="module">
-        import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
-        import { toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
+        import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+        import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
 
         // Tab switching
         const tabs = document.querySelectorAll('.tab');
@@ -739,7 +748,7 @@
             if (ffmpegLoaded) return true;
             
             try {
-                videoAlert.textContent = 'Loading video converter (this may take a moment)...';
+                videoAlert.textContent = 'Loading video converter (~31MB download, this may take a minute)...';
                 videoAlert.className = 'alert';
                 videoAlert.style.display = 'block';
 
@@ -749,21 +758,29 @@
                     console.log(message);
                 });
                 
-                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+                // Use jsdelivr as it has better CORS support
+                const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+                
                 await ffmpeg.load({
                     coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
                     wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
                 });
                 
                 ffmpegLoaded = true;
-                videoAlert.textContent = 'Video converter ready!';
+                videoAlert.textContent = '✓ Video converter ready! You can now convert videos.';
+                videoAlert.className = 'alert alert-info';
                 setTimeout(() => {
                     videoAlert.style.display = 'none';
-                }, 2000);
+                }, 3000);
                 return true;
             } catch (error) {
                 console.error('Failed to load FFmpeg:', error);
-                videoAlert.textContent = 'Failed to load video converter. Please refresh the page and try again. Error: ' + error.message;
+                videoAlert.innerHTML = `<strong>Error loading video converter:</strong> ${error.message}<br><br>
+                    <strong>Troubleshooting:</strong><br>
+                    • Try using Chrome or Edge browser<br>
+                    • Check your internet connection<br>
+                    • Disable browser extensions that might block scripts<br>
+                    • Try refreshing the page`;
                 videoAlert.className = 'alert alert-error';
                 return false;
             }
@@ -871,7 +888,7 @@
                     console.error('Conversion failed for file', i, error);
                     const status = document.getElementById(`status-${i}`);
                     if (status) {
-                        status.textContent = 'Failed!';
+                        status.textContent = 'Failed: ' + error.message;
                         status.style.color = '#ef4444';
                     }
                 }
@@ -889,19 +906,24 @@
             const status = document.getElementById(`status-${index}`);
             
             if (progressBar) progressBar.classList.add('show');
-            if (status) status.textContent = 'Converting...';
+            if (status) status.textContent = 'Processing...';
 
             try {
                 const inputName = `input_${index}.mp4`;
                 const outputName = `output_${index}.webm`;
-                const arrayBuffer = await file.arrayBuffer();
-                await ffmpeg.writeFile(inputName, new Uint8Array(arrayBuffer));
+                
+                // Write file to FFmpeg filesystem
+                await ffmpeg.writeFile(inputName, await fetchFile(file));
 
                 // Set up progress tracking
+                let lastProgress = 0;
                 ffmpeg.on('progress', ({ progress }) => {
                     const percentage = Math.round(progress * 100);
-                    if (progressFill) progressFill.style.width = percentage + '%';
-                    if (status) status.textContent = `Converting... ${percentage}%`;
+                    if (percentage > lastProgress) {
+                        lastProgress = percentage;
+                        if (progressFill) progressFill.style.width = percentage + '%';
+                        if (status) status.textContent = `Converting... ${percentage}%`;
+                    }
                 });
 
                 // Convert to WebM with VP9 codec
@@ -911,6 +933,7 @@
                     '-b:v', `${bitrate}k`,
                     '-c:a', 'libopus',
                     '-b:a', '128k',
+                    '-threads', '4',
                     outputName
                 ]);
 
@@ -919,22 +942,29 @@
                 const blob = new Blob([data.buffer], { type: 'video/webm' });
 
                 // Clean up
-                await ffmpeg.deleteFile(inputName);
-                await ffmpeg.deleteFile(outputName);
+                try {
+                    await ffmpeg.deleteFile(inputName);
+                    await ffmpeg.deleteFile(outputName);
+                } catch (e) {
+                    console.log('Cleanup warning:', e);
+                }
 
                 if (progressFill) progressFill.style.width = '100%';
-                if (status) status.textContent = 'Complete!';
+                if (status) {
+                    status.textContent = '✓ Complete!';
+                    status.style.color = '#10b981';
+                }
                 
                 setTimeout(() => {
                     if (progressBar) progressBar.classList.remove('show');
                     if (status) status.textContent = '';
-                }, 2000);
+                }, 3000);
 
                 return blob;
             } catch (error) {
                 console.error('Conversion error:', error);
                 if (status) {
-                    status.textContent = 'Error: ' + error.message;
+                    status.textContent = 'Error: ' + (error.message || 'Unknown error');
                     status.style.color = '#ef4444';
                 }
                 throw error;
