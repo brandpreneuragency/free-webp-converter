@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PNG/JPG to WebP Converter</title>
+    <title>Media Converter - Images & Videos</title>
     <style>
         * {
             margin: 0;
@@ -25,7 +25,7 @@
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 800px;
+            max-width: 900px;
             width: 100%;
             padding: 40px;
         }
@@ -40,6 +40,42 @@
             color: #666;
             margin-bottom: 30px;
             font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
         }
 
         .upload-area {
@@ -81,7 +117,7 @@
             font-size: 14px;
         }
 
-        #fileInput {
+        #imageInput, #videoInput {
             display: none;
         }
 
@@ -155,7 +191,7 @@
             position: relative;
         }
 
-        .preview-image {
+        .preview-image, .preview-video {
             width: 100%;
             height: 150px;
             object-fit: cover;
@@ -298,6 +334,34 @@
             letter-spacing: 0.5px;
         }
 
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .progress-bar.show {
+            display: block;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .conversion-status {
+            font-size: 12px;
+            color: #667eea;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 25px;
@@ -319,162 +383,237 @@
 </head>
 <body>
     <div class="container">
-        <h1>🖼️ PNG/JPG to WebP Converter</h1>
-        <p class="subtitle">Convert your images to WebP format with adjustable quality. All processing happens in your browser - your files never leave your device.</p>
+        <h1>🎨 Media Converter</h1>
+        <p class="subtitle">Convert your images and videos with adjustable quality. All processing happens in your browser - your files never leave your device.</p>
 
-        <div class="upload-area" id="uploadArea">
-            <div class="upload-icon">📁</div>
-            <div class="upload-text">Click to upload or drag and drop</div>
-            <div class="upload-hint">PNG and JPG files supported</div>
-            <input type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/jpg">
+        <div class="tabs">
+            <button class="tab active" data-tab="images">Images (PNG/JPG → WebP)</button>
+            <button class="tab" data-tab="videos">Videos (MP4 → WebM)</button>
         </div>
 
-        <div class="controls">
-            <div class="control-group">
-                <label>
-                    Quality: <span class="quality-value" id="qualityValue">80%</span>
-                </label>
-                <input type="range" id="qualitySlider" min="1" max="100" value="80">
+        <!-- IMAGES TAB -->
+        <div class="tab-content active" id="images-content">
+            <div class="upload-area" id="imageUploadArea">
+                <div class="upload-icon">🖼️</div>
+                <div class="upload-text">Click to upload or drag and drop</div>
+                <div class="upload-hint">PNG and JPG files supported</div>
+                <input type="file" id="imageInput" multiple accept="image/png,image/jpeg,image/jpg">
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>
+                        Quality: <span class="quality-value" id="imageQualityValue">80%</span>
+                    </label>
+                    <input type="range" id="imageQualitySlider" min="1" max="100" value="80">
+                </div>
+            </div>
+
+            <div class="stats" id="imageStats">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="imageFileCount">0</div>
+                        <div class="stat-label">Files</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="imageOriginalSize">0 KB</div>
+                        <div class="stat-label">Original Size</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="imageConvertedSize">0 KB</div>
+                        <div class="stat-label">WebP Size</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="imageSavedSize">0%</div>
+                        <div class="stat-label">Size Saved</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="preview-grid" id="imagePreviewGrid"></div>
+
+            <div class="actions">
+                <button class="btn-primary" id="imageConvertBtn" disabled>Convert to WebP</button>
+                <button class="btn-primary" id="imageDownloadAllBtn" disabled>Download All as ZIP</button>
+                <button class="btn-secondary" id="imageClearBtn" disabled>Clear All</button>
             </div>
         </div>
 
-        <div class="stats" id="stats">
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-value" id="fileCount">0</div>
-                    <div class="stat-label">Files</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="originalSize">0 KB</div>
-                    <div class="stat-label">Original Size</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="convertedSize">0 KB</div>
-                    <div class="stat-label">WebP Size</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="savedSize">0%</div>
-                    <div class="stat-label">Size Saved</div>
+        <!-- VIDEOS TAB -->
+        <div class="tab-content" id="videos-content">
+            <div class="upload-area" id="videoUploadArea">
+                <div class="upload-icon">🎬</div>
+                <div class="upload-text">Click to upload or drag and drop</div>
+                <div class="upload-hint">MP4 files supported</div>
+                <input type="file" id="videoInput" multiple accept="video/mp4">
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>
+                        Video Quality: <span class="quality-value" id="videoQualityValue">0.8</span>
+                    </label>
+                    <input type="range" id="videoQualitySlider" min="0.1" max="1" step="0.1" value="0.8">
+                    <div style="font-size: 12px; color: #999; margin-top: 5px;">Lower values = smaller file size, higher values = better quality</div>
                 </div>
             </div>
-        </div>
 
-        <div class="preview-grid" id="previewGrid"></div>
+            <div class="stats" id="videoStats">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="videoFileCount">0</div>
+                        <div class="stat-label">Files</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="videoOriginalSize">0 MB</div>
+                        <div class="stat-label">Original Size</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="videoConvertedSize">0 MB</div>
+                        <div class="stat-label">WebM Size</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="videoSavedSize">0%</div>
+                        <div class="stat-label">Size Saved</div>
+                    </div>
+                </div>
+            </div>
 
-        <div class="actions">
-            <button class="btn-primary" id="convertBtn" disabled>Convert to WebP</button>
-            <button class="btn-primary" id="downloadAllBtn" disabled>Download All as ZIP</button>
-            <button class="btn-secondary" id="clearBtn" disabled>Clear All</button>
+            <div class="preview-grid" id="videoPreviewGrid"></div>
+
+            <div class="actions">
+                <button class="btn-primary" id="videoConvertBtn" disabled>Convert to WebM</button>
+                <button class="btn-primary" id="videoDownloadAllBtn" disabled>Download All as ZIP</button>
+                <button class="btn-secondary" id="videoClearBtn" disabled>Clear All</button>
+            </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
     <script>
-        let files = [];
-        let convertedFiles = [];
+        // Tab switching
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
 
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-        const qualitySlider = document.getElementById('qualitySlider');
-        const qualityValue = document.getElementById('qualityValue');
-        const previewGrid = document.getElementById('previewGrid');
-        const convertBtn = document.getElementById('convertBtn');
-        const downloadAllBtn = document.getElementById('downloadAllBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const stats = document.getElementById('stats');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(tc => tc.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(`${tabName}-content`).classList.add('active');
+            });
+        });
+
+        // ==================== IMAGE CONVERTER ====================
+        let imageFiles = [];
+        let convertedImageFiles = [];
+
+        const imageUploadArea = document.getElementById('imageUploadArea');
+        const imageInput = document.getElementById('imageInput');
+        const imageQualitySlider = document.getElementById('imageQualitySlider');
+        const imageQualityValue = document.getElementById('imageQualityValue');
+        const imagePreviewGrid = document.getElementById('imagePreviewGrid');
+        const imageConvertBtn = document.getElementById('imageConvertBtn');
+        const imageDownloadAllBtn = document.getElementById('imageDownloadAllBtn');
+        const imageClearBtn = document.getElementById('imageClearBtn');
+        const imageStats = document.getElementById('imageStats');
 
         // Upload area click
-        uploadArea.addEventListener('click', () => fileInput.click());
+        imageUploadArea.addEventListener('click', () => imageInput.click());
 
         // File input change
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        imageInput.addEventListener('change', (e) => handleImageFiles(e.target.files));
 
         // Drag and drop
-        uploadArea.addEventListener('dragover', (e) => {
+        imageUploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
-            uploadArea.classList.add('dragover');
+            imageUploadArea.classList.add('dragover');
         });
 
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
+        imageUploadArea.addEventListener('dragleave', () => {
+            imageUploadArea.classList.remove('dragover');
         });
 
-        uploadArea.addEventListener('drop', (e) => {
+        imageUploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            handleFiles(e.dataTransfer.files);
+            imageUploadArea.classList.remove('dragover');
+            handleImageFiles(e.dataTransfer.files);
         });
 
         // Quality slider
-        qualitySlider.addEventListener('input', (e) => {
-            qualityValue.textContent = e.target.value + '%';
+        imageQualitySlider.addEventListener('input', (e) => {
+            imageQualityValue.textContent = e.target.value + '%';
         });
 
         // Handle files
-        function handleFiles(fileList) {
+        function handleImageFiles(fileList) {
             const newFiles = Array.from(fileList).filter(file => 
                 file.type === 'image/png' || file.type === 'image/jpeg'
             );
             
-            files = [...files, ...newFiles];
-            updateUI();
+            imageFiles = [...imageFiles, ...newFiles];
+            updateImageUI();
         }
 
         // Update UI
-        function updateUI() {
-            previewGrid.innerHTML = '';
+        function updateImageUI() {
+            imagePreviewGrid.innerHTML = '';
             
-            files.forEach((file, index) => {
+            imageFiles.forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const preview = document.createElement('div');
                     preview.className = 'preview-item';
                     preview.innerHTML = `
-                        <button class="remove-btn" onclick="removeFile(${index})">×</button>
+                        <button class="remove-btn" onclick="removeImageFile(${index})">×</button>
                         <img class="preview-image" src="${e.target.result}" alt="${file.name}">
                         <div class="preview-name">${file.name}</div>
                         <div class="preview-info">Original: ${formatBytes(file.size)}</div>
-                        ${convertedFiles[index] ? `
-                            <div class="preview-info">WebP: ${formatBytes(convertedFiles[index].size)}</div>
+                        ${convertedImageFiles[index] ? `
+                            <div class="preview-info">WebP: ${formatBytes(convertedImageFiles[index].size)}</div>
                             <div class="size-info">
-                                <span class="size-reduction">↓ ${calculateReduction(file.size, convertedFiles[index].size)}%</span>
-                                <button onclick="downloadSingle(${index})" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;">Download</button>
+                                <span class="size-reduction">↓ ${calculateReduction(file.size, convertedImageFiles[index].size)}%</span>
+                                <button onclick="downloadSingleImage(${index})" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;">Download</button>
                             </div>
                         ` : ''}
                     `;
-                    previewGrid.appendChild(preview);
+                    imagePreviewGrid.appendChild(preview);
                 };
                 reader.readAsDataURL(file);
             });
 
-            convertBtn.disabled = files.length === 0;
-            clearBtn.disabled = files.length === 0;
-            downloadAllBtn.disabled = convertedFiles.length === 0;
+            imageConvertBtn.disabled = imageFiles.length === 0;
+            imageClearBtn.disabled = imageFiles.length === 0;
+            imageDownloadAllBtn.disabled = convertedImageFiles.length === 0;
 
-            updateStats();
+            updateImageStats();
         }
 
         // Remove file
-        function removeFile(index) {
-            files.splice(index, 1);
-            convertedFiles.splice(index, 1);
-            updateUI();
+        function removeImageFile(index) {
+            imageFiles.splice(index, 1);
+            convertedImageFiles.splice(index, 1);
+            updateImageUI();
         }
 
         // Convert to WebP
-        convertBtn.addEventListener('click', async () => {
-            convertBtn.disabled = true;
-            convertBtn.textContent = 'Converting...';
-            convertedFiles = [];
+        imageConvertBtn.addEventListener('click', async () => {
+            imageConvertBtn.disabled = true;
+            imageConvertBtn.textContent = 'Converting...';
+            convertedImageFiles = [];
 
-            for (let file of files) {
-                const webpBlob = await convertToWebP(file, qualitySlider.value / 100);
-                convertedFiles.push(webpBlob);
+            for (let file of imageFiles) {
+                const webpBlob = await convertToWebP(file, imageQualitySlider.value / 100);
+                convertedImageFiles.push(webpBlob);
             }
 
-            convertBtn.textContent = 'Convert to WebP';
-            convertBtn.disabled = false;
-            updateUI();
+            imageConvertBtn.textContent = 'Convert to WebP';
+            imageConvertBtn.disabled = false;
+            updateImageUI();
         });
 
         // Convert image to WebP
@@ -502,22 +641,22 @@
         }
 
         // Download single file
-        function downloadSingle(index) {
-            const originalName = files[index].name;
+        function downloadSingleImage(index) {
+            const originalName = imageFiles[index].name;
             const webpName = originalName.replace(/\.(png|jpg|jpeg)$/i, '.webp');
-            downloadBlob(convertedFiles[index], webpName);
+            downloadBlob(convertedImageFiles[index], webpName);
         }
 
         // Download all files as ZIP
-        downloadAllBtn.addEventListener('click', async () => {
-            downloadAllBtn.disabled = true;
-            downloadAllBtn.textContent = 'Creating ZIP...';
+        imageDownloadAllBtn.addEventListener('click', async () => {
+            imageDownloadAllBtn.disabled = true;
+            imageDownloadAllBtn.textContent = 'Creating ZIP...';
             
             const zip = new JSZip();
             const folder = zip.folder('webp-images');
             
-            convertedFiles.forEach((blob, index) => {
-                const originalName = files[index].name;
+            convertedImageFiles.forEach((blob, index) => {
+                const originalName = imageFiles[index].name;
                 const webpName = originalName.replace(/\.(png|jpg|jpeg)$/i, '.webp');
                 folder.file(webpName, blob);
             });
@@ -526,10 +665,292 @@
             const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-');
             downloadBlob(zipBlob, `webp-images-${timestamp}.zip`);
             
-            downloadAllBtn.textContent = 'Download All as ZIP';
-            downloadAllBtn.disabled = false;
+            imageDownloadAllBtn.textContent = 'Download All as ZIP';
+            imageDownloadAllBtn.disabled = false;
         });
 
+        // Clear all
+        imageClearBtn.addEventListener('click', () => {
+            imageFiles = [];
+            convertedImageFiles = [];
+            imageInput.value = '';
+            updateImageUI();
+        });
+
+        // Update stats
+        function updateImageStats() {
+            if (imageFiles.length === 0) {
+                imageStats.classList.remove('show');
+                return;
+            }
+
+            imageStats.classList.add('show');
+            
+            const totalOriginal = imageFiles.reduce((sum, file) => sum + file.size, 0);
+            const totalConverted = convertedImageFiles.reduce((sum, blob) => sum + blob.size, 0);
+            const savedPercent = convertedImageFiles.length > 0 ? calculateReduction(totalOriginal, totalConverted) : 0;
+
+            document.getElementById('imageFileCount').textContent = imageFiles.length;
+            document.getElementById('imageOriginalSize').textContent = formatBytes(totalOriginal);
+            document.getElementById('imageConvertedSize').textContent = convertedImageFiles.length > 0 ? formatBytes(totalConverted) : '-';
+            document.getElementById('imageSavedSize').textContent = convertedImageFiles.length > 0 ? savedPercent + '%' : '-';
+        }
+
+        // ==================== VIDEO CONVERTER ====================
+        let videoFiles = [];
+        let convertedVideoFiles = [];
+        let ffmpeg = null;
+        let ffmpegLoaded = false;
+
+        const videoUploadArea = document.getElementById('videoUploadArea');
+        const videoInput = document.getElementById('videoInput');
+        const videoQualitySlider = document.getElementById('videoQualitySlider');
+        const videoQualityValue = document.getElementById('videoQualityValue');
+        const videoPreviewGrid = document.getElementById('videoPreviewGrid');
+        const videoConvertBtn = document.getElementById('videoConvertBtn');
+        const videoDownloadAllBtn = document.getElementById('videoDownloadAllBtn');
+        const videoClearBtn = document.getElementById('videoClearBtn');
+        const videoStats = document.getElementById('videoStats');
+
+        // Initialize FFmpeg
+        async function loadFFmpeg() {
+            if (ffmpegLoaded) return;
+            
+            try {
+                const { FFmpeg } = FFmpegWASM;
+                ffmpeg = new FFmpeg();
+                
+                await ffmpeg.load({
+                    coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+                    wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
+                });
+                
+                ffmpegLoaded = true;
+                console.log('FFmpeg loaded successfully');
+            } catch (error) {
+                console.error('Failed to load FFmpeg:', error);
+                alert('Failed to load video converter. Please refresh the page and try again.');
+            }
+        }
+
+        // Upload area click
+        videoUploadArea.addEventListener('click', () => videoInput.click());
+
+        // File input change
+        videoInput.addEventListener('change', (e) => handleVideoFiles(e.target.files));
+
+        // Drag and drop
+        videoUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            videoUploadArea.classList.add('dragover');
+        });
+
+        videoUploadArea.addEventListener('dragleave', () => {
+            videoUploadArea.classList.remove('dragover');
+        });
+
+        videoUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            videoUploadArea.classList.remove('dragover');
+            handleVideoFiles(e.dataTransfer.files);
+        });
+
+        // Quality slider
+        videoQualitySlider.addEventListener('input', (e) => {
+            videoQualityValue.textContent = e.target.value;
+        });
+
+        // Handle files
+        function handleVideoFiles(fileList) {
+            const newFiles = Array.from(fileList).filter(file => 
+                file.type === 'video/mp4'
+            );
+            
+            videoFiles = [...videoFiles, ...newFiles];
+            updateVideoUI();
+        }
+
+        // Update UI
+        function updateVideoUI() {
+            videoPreviewGrid.innerHTML = '';
+            
+            videoFiles.forEach((file, index) => {
+                const url = URL.createObjectURL(file);
+                const preview = document.createElement('div');
+                preview.className = 'preview-item';
+                preview.innerHTML = `
+                    <button class="remove-btn" onclick="removeVideoFile(${index})">×</button>
+                    <video class="preview-video" src="${url}" controls></video>
+                    <div class="preview-name">${file.name}</div>
+                    <div class="preview-info">Original: ${formatBytes(file.size)}</div>
+                    ${convertedVideoFiles[index] ? `
+                        <div class="preview-info">WebM: ${formatBytes(convertedVideoFiles[index].size)}</div>
+                        <div class="size-info">
+                            <span class="size-reduction">↓ ${calculateReduction(file.size, convertedVideoFiles[index].size)}%</span>
+                            <button onclick="downloadSingleVideo(${index})" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;">Download</button>
+                        </div>
+                    ` : ''}
+                    <div class="progress-bar" id="progress-${index}">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <div class="conversion-status" id="status-${index}"></div>
+                `;
+                videoPreviewGrid.appendChild(preview);
+            });
+
+            videoConvertBtn.disabled = videoFiles.length === 0;
+            videoClearBtn.disabled = videoFiles.length === 0;
+            videoDownloadAllBtn.disabled = convertedVideoFiles.length === 0;
+
+            updateVideoStats();
+        }
+
+        // Remove file
+        function removeVideoFile(index) {
+            videoFiles.splice(index, 1);
+            convertedVideoFiles.splice(index, 1);
+            updateVideoUI();
+        }
+
+        // Convert to WebM
+        videoConvertBtn.addEventListener('click', async () => {
+            videoConvertBtn.disabled = true;
+            videoConvertBtn.textContent = 'Loading converter...';
+            
+            await loadFFmpeg();
+            
+            videoConvertBtn.textContent = 'Converting...';
+            convertedVideoFiles = [];
+
+            for (let i = 0; i < videoFiles.length; i++) {
+                const webmBlob = await convertToWebM(videoFiles[i], videoQualitySlider.value, i);
+                convertedVideoFiles.push(webmBlob);
+            }
+
+            videoConvertBtn.textContent = 'Convert to WebM';
+            videoConvertBtn.disabled = false;
+            updateVideoUI();
+        });
+
+        // Convert video to WebM
+        async function convertToWebM(file, quality, index) {
+            const progressBar = document.getElementById(`progress-${index}`);
+            const progressFill = progressBar.querySelector('.progress-fill');
+            const status = document.getElementById(`status-${index}`);
+            
+            progressBar.classList.add('show');
+            status.textContent = 'Converting...';
+
+            try {
+                // Write input file to FFmpeg filesystem
+                const inputName = 'input.mp4';
+                const outputName = 'output.webm';
+                const arrayBuffer = await file.arrayBuffer();
+                await ffmpeg.writeFile(inputName, new Uint8Array(arrayBuffer));
+
+                // Set up progress tracking
+                ffmpeg.on('progress', ({ progress }) => {
+                    const percentage = Math.round(progress * 100);
+                    progressFill.style.width = percentage + '%';
+                    status.textContent = `Converting... ${percentage}%`;
+                });
+
+                // Convert to WebM with VP9 codec
+                // CRF (Constant Rate Factor): lower = better quality, typical range 15-35
+                const crf = Math.round(50 - (quality * 35)); // Maps 0.1-1.0 to ~50-15
+                
+                await ffmpeg.exec([
+                    '-i', inputName,
+                    '-c:v', 'libvpx-vp9',
+                    '-crf', crf.toString(),
+                    '-b:v', '0',
+                    '-c:a', 'libopus',
+                    outputName
+                ]);
+
+                // Read output file
+                const data = await ffmpeg.readFile(outputName);
+                const blob = new Blob([data.buffer], { type: 'video/webm' });
+
+                // Clean up
+                await ffmpeg.deleteFile(inputName);
+                await ffmpeg.deleteFile(outputName);
+
+                progressFill.style.width = '100%';
+                status.textContent = 'Complete!';
+                
+                setTimeout(() => {
+                    progressBar.classList.remove('show');
+                    status.textContent = '';
+                }, 2000);
+
+                return blob;
+            } catch (error) {
+                console.error('Conversion error:', error);
+                status.textContent = 'Error!';
+                status.style.color = '#ef4444';
+                throw error;
+            }
+        }
+
+        // Download single file
+        function downloadSingleVideo(index) {
+            const originalName = videoFiles[index].name;
+            const webmName = originalName.replace(/\.mp4$/i, '.webm');
+            downloadBlob(convertedVideoFiles[index], webmName);
+        }
+
+        // Download all files as ZIP
+        videoDownloadAllBtn.addEventListener('click', async () => {
+            videoDownloadAllBtn.disabled = true;
+            videoDownloadAllBtn.textContent = 'Creating ZIP...';
+            
+            const zip = new JSZip();
+            const folder = zip.folder('webm-videos');
+            
+            convertedVideoFiles.forEach((blob, index) => {
+                const originalName = videoFiles[index].name;
+                const webmName = originalName.replace(/\.mp4$/i, '.webm');
+                folder.file(webmName, blob);
+            });
+            
+            const zipBlob = await zip.generateAsync({type: 'blob'});
+            const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-');
+            downloadBlob(zipBlob, `webm-videos-${timestamp}.zip`);
+            
+            videoDownloadAllBtn.textContent = 'Download All as ZIP';
+            videoDownloadAllBtn.disabled = false;
+        });
+
+        // Clear all
+        videoClearBtn.addEventListener('click', () => {
+            videoFiles = [];
+            convertedVideoFiles = [];
+            videoInput.value = '';
+            updateVideoUI();
+        });
+
+        // Update stats
+        function updateVideoStats() {
+            if (videoFiles.length === 0) {
+                videoStats.classList.remove('show');
+                return;
+            }
+
+            videoStats.classList.add('show');
+            
+            const totalOriginal = videoFiles.reduce((sum, file) => sum + file.size, 0);
+            const totalConverted = convertedVideoFiles.reduce((sum, blob) => sum + blob.size, 0);
+            const savedPercent = convertedVideoFiles.length > 0 ? calculateReduction(totalOriginal, totalConverted) : 0;
+
+            document.getElementById('videoFileCount').textContent = videoFiles.length;
+            document.getElementById('videoOriginalSize').textContent = formatBytes(totalOriginal);
+            document.getElementById('videoConvertedSize').textContent = convertedVideoFiles.length > 0 ? formatBytes(totalConverted) : '-';
+            document.getElementById('videoSavedSize').textContent = convertedVideoFiles.length > 0 ? savedPercent + '%' : '-';
+        }
+
+        // ==================== SHARED UTILITIES ====================
+        
         // Download blob
         function downloadBlob(blob, filename) {
             const url = URL.createObjectURL(blob);
@@ -542,19 +963,11 @@
             URL.revokeObjectURL(url);
         }
 
-        // Clear all
-        clearBtn.addEventListener('click', () => {
-            files = [];
-            convertedFiles = [];
-            fileInput.value = '';
-            updateUI();
-        });
-
         // Format bytes
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
             const k = 1024;
-            const sizes = ['B', 'KB', 'MB'];
+            const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
@@ -562,25 +975,6 @@
         // Calculate reduction
         function calculateReduction(original, converted) {
             return Math.round((1 - converted / original) * 100);
-        }
-
-        // Update stats
-        function updateStats() {
-            if (files.length === 0) {
-                stats.classList.remove('show');
-                return;
-            }
-
-            stats.classList.add('show');
-            
-            const totalOriginal = files.reduce((sum, file) => sum + file.size, 0);
-            const totalConverted = convertedFiles.reduce((sum, blob) => sum + blob.size, 0);
-            const savedPercent = convertedFiles.length > 0 ? calculateReduction(totalOriginal, totalConverted) : 0;
-
-            document.getElementById('fileCount').textContent = files.length;
-            document.getElementById('originalSize').textContent = formatBytes(totalOriginal);
-            document.getElementById('convertedSize').textContent = convertedFiles.length > 0 ? formatBytes(totalConverted) : '-';
-            document.getElementById('savedSize').textContent = convertedFiles.length > 0 ? savedPercent + '%' : '-';
         }
     </script>
 </body>
