@@ -245,6 +245,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            z-index: 10;
         }
 
         .remove-btn:hover {
@@ -274,7 +275,7 @@
             color: white;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
@@ -284,7 +285,7 @@
             color: #333;
         }
 
-        .btn-secondary:hover {
+        .btn-secondary:hover:not(:disabled) {
             background: #e5e7eb;
         }
 
@@ -360,6 +361,22 @@
             color: #667eea;
             margin-top: 5px;
             font-weight: 600;
+        }
+
+        .alert {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
         }
 
         @media (max-width: 600px) {
@@ -441,6 +458,8 @@
 
         <!-- VIDEOS TAB -->
         <div class="tab-content" id="videos-content">
+            <div id="videoAlert" class="alert" style="display: none;"></div>
+
             <div class="upload-area" id="videoUploadArea">
                 <div class="upload-icon">🎬</div>
                 <div class="upload-text">Click to upload or drag and drop</div>
@@ -451,10 +470,10 @@
             <div class="controls">
                 <div class="control-group">
                     <label>
-                        Video Quality: <span class="quality-value" id="videoQualityValue">0.8</span>
+                        Video Bitrate: <span class="quality-value" id="videoQualityValue">1000k</span>
                     </label>
-                    <input type="range" id="videoQualitySlider" min="0.1" max="1" step="0.1" value="0.8">
-                    <div style="font-size: 12px; color: #999; margin-top: 5px;">Lower values = smaller file size, higher values = better quality</div>
+                    <input type="range" id="videoQualitySlider" min="500" max="5000" step="100" value="1000">
+                    <div style="font-size: 12px; color: #999; margin-top: 5px;">Lower = smaller file size, Higher = better quality</div>
                 </div>
             </div>
 
@@ -490,8 +509,10 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
-    <script>
+    <script type="module">
+        import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+        import { toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
+
         // Tab switching
         const tabs = document.querySelectorAll('.tab');
         const tabContents = document.querySelectorAll('.tab-content');
@@ -569,7 +590,7 @@
                     const preview = document.createElement('div');
                     preview.className = 'preview-item';
                     preview.innerHTML = `
-                        <button class="remove-btn" onclick="removeImageFile(${index})">×</button>
+                        <button class="remove-btn" onclick="window.removeImageFile(${index})">×</button>
                         <img class="preview-image" src="${e.target.result}" alt="${file.name}">
                         <div class="preview-name">${file.name}</div>
                         <div class="preview-info">Original: ${formatBytes(file.size)}</div>
@@ -577,7 +598,7 @@
                             <div class="preview-info">WebP: ${formatBytes(convertedImageFiles[index].size)}</div>
                             <div class="size-info">
                                 <span class="size-reduction">↓ ${calculateReduction(file.size, convertedImageFiles[index].size)}%</span>
-                                <button onclick="downloadSingleImage(${index})" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;">Download</button>
+                                <button onclick="window.downloadSingleImage(${index})" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;">Download</button>
                             </div>
                         ` : ''}
                     `;
@@ -594,7 +615,7 @@
         }
 
         // Remove file
-        function removeImageFile(index) {
+        window.removeImageFile = function(index) {
             imageFiles.splice(index, 1);
             convertedImageFiles.splice(index, 1);
             updateImageUI();
@@ -641,7 +662,7 @@
         }
 
         // Download single file
-        function downloadSingleImage(index) {
+        window.downloadSingleImage = function(index) {
             const originalName = imageFiles[index].name;
             const webpName = originalName.replace(/\.(png|jpg|jpeg)$/i, '.webp');
             downloadBlob(convertedImageFiles[index], webpName);
@@ -711,25 +732,40 @@
         const videoDownloadAllBtn = document.getElementById('videoDownloadAllBtn');
         const videoClearBtn = document.getElementById('videoClearBtn');
         const videoStats = document.getElementById('videoStats');
+        const videoAlert = document.getElementById('videoAlert');
 
         // Initialize FFmpeg
         async function loadFFmpeg() {
-            if (ffmpegLoaded) return;
+            if (ffmpegLoaded) return true;
             
             try {
-                const { FFmpeg } = FFmpegWASM;
+                videoAlert.textContent = 'Loading video converter (this may take a moment)...';
+                videoAlert.className = 'alert';
+                videoAlert.style.display = 'block';
+
                 ffmpeg = new FFmpeg();
                 
+                ffmpeg.on('log', ({ message }) => {
+                    console.log(message);
+                });
+                
+                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
                 await ffmpeg.load({
-                    coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
-                    wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
+                    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
                 });
                 
                 ffmpegLoaded = true;
-                console.log('FFmpeg loaded successfully');
+                videoAlert.textContent = 'Video converter ready!';
+                setTimeout(() => {
+                    videoAlert.style.display = 'none';
+                }, 2000);
+                return true;
             } catch (error) {
                 console.error('Failed to load FFmpeg:', error);
-                alert('Failed to load video converter. Please refresh the page and try again.');
+                videoAlert.textContent = 'Failed to load video converter. Please refresh the page and try again. Error: ' + error.message;
+                videoAlert.className = 'alert alert-error';
+                return false;
             }
         }
 
@@ -757,7 +793,7 @@
 
         // Quality slider
         videoQualitySlider.addEventListener('input', (e) => {
-            videoQualityValue.textContent = e.target.value;
+            videoQualityValue.textContent = e.target.value + 'k';
         });
 
         // Handle files
@@ -779,7 +815,7 @@
                 const preview = document.createElement('div');
                 preview.className = 'preview-item';
                 preview.innerHTML = `
-                    <button class="remove-btn" onclick="removeVideoFile(${index})">×</button>
+                    <button class="remove-btn" onclick="window.removeVideoFile(${index})">×</button>
                     <video class="preview-video" src="${url}" controls></video>
                     <div class="preview-name">${file.name}</div>
                     <div class="preview-info">Original: ${formatBytes(file.size)}</div>
@@ -787,7 +823,7 @@
                         <div class="preview-info">WebM: ${formatBytes(convertedVideoFiles[index].size)}</div>
                         <div class="size-info">
                             <span class="size-reduction">↓ ${calculateReduction(file.size, convertedVideoFiles[index].size)}%</span>
-                            <button onclick="downloadSingleVideo(${index})" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;">Download</button>
+                            <button onclick="window.downloadSingleVideo(${index})" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;">Download</button>
                         </div>
                     ` : ''}
                     <div class="progress-bar" id="progress-${index}">
@@ -806,7 +842,7 @@
         }
 
         // Remove file
-        function removeVideoFile(index) {
+        window.removeVideoFile = function(index) {
             videoFiles.splice(index, 1);
             convertedVideoFiles.splice(index, 1);
             updateVideoUI();
@@ -817,14 +853,28 @@
             videoConvertBtn.disabled = true;
             videoConvertBtn.textContent = 'Loading converter...';
             
-            await loadFFmpeg();
+            const loaded = await loadFFmpeg();
+            if (!loaded) {
+                videoConvertBtn.disabled = false;
+                videoConvertBtn.textContent = 'Convert to WebM';
+                return;
+            }
             
             videoConvertBtn.textContent = 'Converting...';
             convertedVideoFiles = [];
 
             for (let i = 0; i < videoFiles.length; i++) {
-                const webmBlob = await convertToWebM(videoFiles[i], videoQualitySlider.value, i);
-                convertedVideoFiles.push(webmBlob);
+                try {
+                    const webmBlob = await convertToWebM(videoFiles[i], videoQualitySlider.value, i);
+                    convertedVideoFiles.push(webmBlob);
+                } catch (error) {
+                    console.error('Conversion failed for file', i, error);
+                    const status = document.getElementById(`status-${i}`);
+                    if (status) {
+                        status.textContent = 'Failed!';
+                        status.style.color = '#ef4444';
+                    }
+                }
             }
 
             videoConvertBtn.textContent = 'Convert to WebM';
@@ -833,38 +883,34 @@
         });
 
         // Convert video to WebM
-        async function convertToWebM(file, quality, index) {
+        async function convertToWebM(file, bitrate, index) {
             const progressBar = document.getElementById(`progress-${index}`);
-            const progressFill = progressBar.querySelector('.progress-fill');
+            const progressFill = progressBar?.querySelector('.progress-fill');
             const status = document.getElementById(`status-${index}`);
             
-            progressBar.classList.add('show');
-            status.textContent = 'Converting...';
+            if (progressBar) progressBar.classList.add('show');
+            if (status) status.textContent = 'Converting...';
 
             try {
-                // Write input file to FFmpeg filesystem
-                const inputName = 'input.mp4';
-                const outputName = 'output.webm';
+                const inputName = `input_${index}.mp4`;
+                const outputName = `output_${index}.webm`;
                 const arrayBuffer = await file.arrayBuffer();
                 await ffmpeg.writeFile(inputName, new Uint8Array(arrayBuffer));
 
                 // Set up progress tracking
                 ffmpeg.on('progress', ({ progress }) => {
                     const percentage = Math.round(progress * 100);
-                    progressFill.style.width = percentage + '%';
-                    status.textContent = `Converting... ${percentage}%`;
+                    if (progressFill) progressFill.style.width = percentage + '%';
+                    if (status) status.textContent = `Converting... ${percentage}%`;
                 });
 
                 // Convert to WebM with VP9 codec
-                // CRF (Constant Rate Factor): lower = better quality, typical range 15-35
-                const crf = Math.round(50 - (quality * 35)); // Maps 0.1-1.0 to ~50-15
-                
                 await ffmpeg.exec([
                     '-i', inputName,
                     '-c:v', 'libvpx-vp9',
-                    '-crf', crf.toString(),
-                    '-b:v', '0',
+                    '-b:v', `${bitrate}k`,
                     '-c:a', 'libopus',
+                    '-b:a', '128k',
                     outputName
                 ]);
 
@@ -876,25 +922,27 @@
                 await ffmpeg.deleteFile(inputName);
                 await ffmpeg.deleteFile(outputName);
 
-                progressFill.style.width = '100%';
-                status.textContent = 'Complete!';
+                if (progressFill) progressFill.style.width = '100%';
+                if (status) status.textContent = 'Complete!';
                 
                 setTimeout(() => {
-                    progressBar.classList.remove('show');
-                    status.textContent = '';
+                    if (progressBar) progressBar.classList.remove('show');
+                    if (status) status.textContent = '';
                 }, 2000);
 
                 return blob;
             } catch (error) {
                 console.error('Conversion error:', error);
-                status.textContent = 'Error!';
-                status.style.color = '#ef4444';
+                if (status) {
+                    status.textContent = 'Error: ' + error.message;
+                    status.style.color = '#ef4444';
+                }
                 throw error;
             }
         }
 
         // Download single file
-        function downloadSingleVideo(index) {
+        window.downloadSingleVideo = function(index) {
             const originalName = videoFiles[index].name;
             const webmName = originalName.replace(/\.mp4$/i, '.webm');
             downloadBlob(convertedVideoFiles[index], webmName);
